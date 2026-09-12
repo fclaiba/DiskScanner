@@ -1,0 +1,52 @@
+{
+  ".claude/.headroom_wrap_marker.json": {
+    "mtime": 1788915930.9069486,
+    "ast_hash": "8452b5d9df25655f095ce436ec5b98a6",
+    "semantic_hash": "8452b5d9df25655f095ce436ec5b98a6"
+  },
+  ".claude/settings.local.json": {
+    "mtime": 1788915930.9059236,
+    "ast_hash": "79b54cea207fcb7107a2875425ef2c7b",
+    "semantic_hash": "79b54cea207fcb7107a2875425ef2c7b"
+  },
+  ".tokensave/config.json": {
+    "mtime": 1788915876.932519,
+    "ast_hash": "4abfb7059a3d502499be218fa02bc9f5",
+    "semantic_hash": "4abfb7059a3d502499be218fa02bc9f5"
+  },
+  "app.py": {
+    "mtime": 1786528879.4963813,
+    "ast_hash": "06666e0066df1050e86a5095049d897a",
+    "semantic_hash": "06666e0066df1050e86a5095049d897a"
+  },
+  "build.py": {
+    "mtime": 1786529257.9807165,
+    "ast_hash": "c90d609a22a8d549ddccd8a2f66bdb99",
+    "semantic_hash": "c90d609a22a8d549ddccd8a2f66bdb99"
+  },
+  "main.py": {
+    "mtime": 1786520500.609864,
+    "ast_hash": "445b486edbee0a481ac12a8cb3bffd8c",
+    "semantic_hash": "445b486edbee0a481ac12a8cb3bffd8c"
+  },
+  "scanner_logic.py": {
+    "mtime": 1786529231.7672472,
+    "ast_hash": "2079f5eb6a96eeac79996c476297fa63",
+    "semantic_hash": "2079f5eb6a96eeac79996c476297fa63"
+  },
+  "static/app.js": {
+    "mtime": 1786528950.7576685,
+    "ast_hash": "40d87f67024b574edf2d8e33ea283b79",
+    "semantic_hash": "40d87f67024b574edf2d8e33ea283b79"
+  },
+  "README.md": {
+    "mtime": 1786523963.2612107,
+    "ast_hash": "e8d26814c8b2cf07b9c5f24696d3475b",
+    "semantic_hash": "e8d26814c8b2cf07b9c5f24696d3475b"
+  },
+  "templates/index.html": {
+    "mtime": 1786528913.2248063,
+    "ast_hash": "03ad24c01fae2fe647ff926491341370",
+    "semantic_hash": "03ad24c01fae2fe647ff926491341370"
+  }
+}
