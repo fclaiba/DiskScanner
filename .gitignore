@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build outputs (los binarios se publican en GitHub Releases, no en git)
+build/
+dist/
+dist_nuitka/
+_obf_build/
+*.spec.bak
+
+# Node / web
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.data/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Tooling local / generado
+.tokensave/
+graphify-out/
+.claude/.headroom_wrap_marker.json
+.DS_Store
+Thumbs.db
