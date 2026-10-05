@@ -27,7 +27,7 @@ export DISKSCANNER_API_URL=http://localhost:3000
 export DISKSCANNER_ENTITLEMENT_PUBKEY="k1:<base64 del paso 1>"
 python main.py
 ```
-Para tener Pro sin Stripe en local: `cd web && npx tsx scripts/grant-pro.ts tu@email.com` (solo desarrollo).
+Para tener Pro sin Stripe en local: registrate, frená `npm run dev` y ejecutá `cd web && npm run dev:grant-pro -- tu@email.com` (solo desarrollo; PGlite admite un proceso a la vez).
 
 **Antes de lanzar, revisá lo marcado `(propuesta a validar)`:**
 - Precios (USD 5,99/mes y USD 47,99/año) y prueba de 7 días: blueprint §7.7, `web/src/config/plans.ts`.

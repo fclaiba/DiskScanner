@@ -1,6 +1,7 @@
 # Contrato Desktop ↔ Web — DiskScanner Turbo (API v1)
 
 > Fuente de verdad del límite entre la app de escritorio (`desktop/`, Python) y la plataforma SaaS (`web/`, Next.js).
+> 2026-10-05: se documentan las decisiones de implementación (código desconocido, jitter de `slow_down`, header faltante, opcionales de reportes).
 > Cualquier cambio acá exige actualizar ambos lados y el BLUEPRINT (sección 7.2 / 14). Última actualización: 2026-10-05.
 
 ## Convenciones
@@ -95,6 +96,8 @@ Entrada: `{ "device_code": "…" }`
 }
 ```
 El token se guarda en el servidor solo como hash SHA-256. Se canjea una única vez.
+- Un `device_code` desconocido responde `400 expired_token` (los registros viejos se purgan a diario y no se distinguen de los vencidos).
+- `slow_down` tolera 500 ms de jitter: se dispara si dos polls llegan con menos de `interval − 0,5` s.
 
 ## Endpoints autenticados del dispositivo
 
@@ -102,7 +105,7 @@ El token se guarda en el servidor solo como hash SHA-256. Se canjea una única v
 Headers: `Authorization`, `X-Device-Fingerprint`.
 - `200` → `SignedEntitlement` (y actualiza `devices.last_seen_at`, `app_version` si llega header `X-App-Version`).
 - `401 invalid_token` — token desconocido o equipo revocado → el desktop borra la sesión local y vuelve a modo gratis.
-- `403 fingerprint_mismatch` — el token se usa desde otra máquina.
+- `403 fingerprint_mismatch` — el token se usa desde otra máquina, o falta el header `X-Device-Fingerprint` (aplica a los tres endpoints autenticados).
 - `429 rate_limited` — 120/hora por dispositivo.
 
 ### `POST /api/v1/reports`
@@ -120,6 +123,8 @@ Solo resúmenes agregados; **nunca rutas, nombres de archivo ni nombres de carpe
 }
 ```
 - Enteros ≥ 0 (bytes hasta 2^53-1). `categories` ≤ 50 ítems, `key` `^[a-z0-9_]{1,40}$`. Cuerpo ≤ 32 KB.
+- `reclaimable_bytes`, `freed_bytes` (default 0) y `categories` (default `[]`) son opcionales; cualquier campo extra se rechaza.
+- Orden de verificación: 401 → 403 fingerprint → 403 feature → 429 → 413 → 400.
 - `201 { "id": "uuid" }`. Errores: `400 invalid_request`, `401 invalid_token`, `403 feature_not_available` (cuenta sin `sync`), `413 payload_too_large`, `429 rate_limited` (60/hora por dispositivo).
 
 ### `POST /api/v1/devices/self/revoke`

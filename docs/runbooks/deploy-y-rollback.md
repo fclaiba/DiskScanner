@@ -2,11 +2,7 @@
 
 ## Deploy normal (web)
 1. PR con CI verde (`ci.yml`) y preview de Vercel revisada.
-2. Si el PR trae migraciones (`web/drizzle/`): aplicarlas **antes** del merge contra producción
-   ```bash
-   cd web && DATABASE_URL="<url de producción de Neon>" npm run db:migrate
-   ```
-   Las migraciones deben ser compatibles hacia atrás (agregar columnas/tablas; borrar en un deploy posterior).
+2. Si el PR trae migraciones (`web/drizzle/`): Vercel las aplica solo en el build (`vercel.json`). Requisitos: compatibles hacia atrás (agregar columnas/tablas; borrar en un deploy posterior) y probadas antes en la preview, que usa su propia rama de Neon.
 3. Merge a `main` → Vercel despliega producción automáticamente.
 4. Verificar (15 min):
    - `GET https://<dominio>/api/v1/health` → `{ "ok": true }`.

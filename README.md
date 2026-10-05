@@ -1,86 +1,68 @@
 <div align="center">
 
-# 🚀 DiskScanner Turbo
+# DiskScanner Turbo
 
-**A modern, blazing-fast, and beautiful storage analyzer for Windows.**
+**See what fills your Windows drive. Clear it in one click.**
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?logo=python&logoColor=white)](https://www.python.org)
-[![Flask](https://img.shields.io/badge/Flask-Backend-black?logo=flask)](https://flask.palletsprojects.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Status: Active](https://img.shields.io/badge/Status-Active-success.svg)]()
-
-<p align="center">
-  <em>Say goodbye to boring and slow disk analyzers. DiskScanner Turbo combines a low-level scanning engine (<code>os.scandir</code>) with a stunning <b>Glassmorphism</b> interface.</em>
-</p>
-
----
-
-<!-- 📸 YOU CAN PLACE A GIF OR SCREENSHOT OF YOUR APP HERE 📸 -->
-<!-- <img src="docs/screenshot.png" alt="DiskScanner Turbo Interface" width="800"/> -->
+[![CI](https://github.com/fclaiba/DiskScanner/actions/workflows/ci.yml/badge.svg)](https://github.com/fclaiba/DiskScanner/actions/workflows/ci.yml)
 
 </div>
 
-## ✨ Key Features
+DiskScanner Turbo is a fast disk analyzer and safe one-click cleaner for Windows 10/11, sold as a subscription (free tier included). This monorepo holds the desktop app and the SaaS platform that sells and licenses it.
 
-Unlike classic tools like *WinDirStat* or *TreeSize*, DiskScanner Turbo is designed for the modern user, developers, and gamers:
+| Part | Path | Stack |
+|---|---|---|
+| Desktop app (Windows) | [`desktop/`](desktop/) | Python 3.11 · Flask (local, hardened) · PyWebView · PyInstaller / Nuitka |
+| Web platform (marketing, accounts, billing, dashboard, API) | [`web/`](web/) | Next.js 16 · TypeScript · Tailwind v4 · Drizzle + Postgres · Stripe |
+| Docs (blueprint, contract, ADRs, runbooks) | [`docs/`](docs/) | Spanish |
 
-*   ⚡ **Ultra-Fast Scanning (Turbo Engine):** Uses `os.scandir` to communicate directly with the OS cache, scanning millions of files in seconds. Automatically filters out "black holes" like `.git` or `.env`.
-*   📡 **Real-Time Feedback:** Forget about frozen loading screens. Thanks to **Server-Sent Events (SSE)**, you see exactly which folder is being analyzed millisecond by millisecond.
-*   🗑️ **Built-in `node_modules` Destroyer:** Web developer? Find and purge gigabytes of old Node.js dependencies across your entire drive with a single click.
-*   🤖 **Gradle Cache Cleaner:** Free up massive amounts of space by safely deleting the Android Studio build cache (`.gradle/caches`).
-*   🎮 **Game Store Radar:** Automatically detects and groups massive installations from **Epic Games, Microsoft Store (Xbox), Steam, Riot Games, and Ubisoft**. Find those lost 150GB!
-*   🧟 **Zombie File Hunter:** Finds files larger than 50 MB that haven't been opened or modified in over 1 year.
-*   📊 **Report Export:** Instantly generate a detailed `.txt` report, processed 100% in the client's browser.
-*   💎 **Premium Design:** Dark, fluid interface featuring a modern Glassmorphism UI.
+## Product
 
-## 📥 Installation and Usage
+**Free**: scan any drive with real-time streaming, an interactive treemap, the largest files, duplicates (hash-based), zombie files (>50 MB, untouched for a year), game library radar (Steam, Epic, Xbox, Riot, Ubisoft), disk health (SMART), Smart Cleanup analysis and TXT report export.
 
-### Option 1: For Regular Users (Recommended)
-You don't need to know how to code or install Python.
+**Pro** (monthly or yearly, 7-day free trial, up to 3 PCs): every cleanup, including Smart Cleanup in one click (browser, GPU shader, messaging and developer caches, Xcode DerivedData, Recycle Bin, old virtualenvs), the `node_modules` destroyer, Gradle cache, Windows Update leftovers, Downloads organizer and more. It also syncs to the web dashboard, which shows GB freed and history.
 
-1. Go to the **[Releases](#)** section (Coming soon).
-2. Download `DiskScannerTurbo.exe`.
-3. Double-click it and you're done! It will open as a native Windows application.
+**Privacy:** the app only syncs aggregate numbers (bytes, counts, category keys). It never sends file names, folder names or paths.
 
-### Option 2: For Developers (Source Code)
-If you want to modify the code, run the local web server, or compile your own executable:
+## How it fits together
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/DiskScannerWeb.git
-cd DiskScannerWeb
-
-# 2. Create a virtual environment (optional but recommended)
-python -m venv venv
-venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Start the desktop application (PyWebView)
-python main.py
-
-# (Optional) If you just want to run the web server on port 5000:
-python app.py
+```
+Desktop (Windows) ── HTTPS /api/v1 ──► Web (Vercel) ──► Postgres (Neon)
+   │  device-code linking                 │  ▲
+   │  Ed25519-signed entitlement          ▼  │ webhooks
+   │  (works 7 days offline)            Stripe Billing
+   └── installer from GitHub Releases
 ```
 
-## 🛠️ Compiling the Executable (.exe)
-If you've made changes and want to generate your own portable `.exe` using PyInstaller:
+The binding contract between both sides is [`docs/CONTRATO-API.md`](docs/CONTRATO-API.md).
+
+## Development
 
 ```bash
-pip install pyinstaller
-pyinstaller --noconsole --onefile --name "DiskScannerTurbo" --add-data "templates;templates" --add-data "static;static" main.py
+# Web (no Postgres or Stripe needed locally: uses embedded PGlite)
+cd web && npm ci && cp .env.example .env.local
+npm run keys:generate        # put ENTITLEMENT_SIGNING_KEY in .env.local, keep the k1:... line
+npm run dev                  # http://localhost:3000
+
+# Desktop
+cd desktop && pip install -r requirements.txt -r requirements-dev.txt
+DISKSCANNER_API_URL=http://localhost:3000 DISKSCANNER_ENTITLEMENT_PUBKEY="k1:..." python main.py
 ```
-The final file will be located in the `dist/` folder.
 
-## 🧠 Tech Architecture
-*   **Backend:** Python 3, Flask, Python generators for data streaming (SSE).
-*   **Frontend:** HTML5, Vanilla JavaScript, CSS3 (Custom Glassmorphism design).
-*   **Data Visualization:** Apache ECharts (Interactive Treemap).
-*   **Desktop Wrapper:** PyWebView to integrate the web server into a native OS window without needing browsers.
+Quality gates (also enforced in CI):
 
-## 🤝 Contributing
-PRs (Pull Requests) are welcome! If you have ideas for new "1-Click Cleaners" (e.g. Docker, pip cache, etc.) or performance improvements, feel free to contribute.
+```bash
+cd web && npm run lint && npm run typecheck && npm run test:coverage && npm run build && npm run test:e2e
+cd desktop && ruff check . && python -m pytest -q
+```
 
-## 📄 License
-This project is licensed under the MIT License. Feel free to use it, modify it, and share it.
+## Release & launch
+
+- Desktop: push a tag `vX.Y.Z` and [`desktop-release.yml`](.github/workflows/desktop-release.yml) builds, optionally signs, and publishes `DiskScannerTurbo.exe` to GitHub Releases.
+- Web: deploy `web/` to Vercel (Root Directory `web`).
+- Step-by-step go-live checklist (Stripe, Neon, Resend, Vercel, keys, code signing): [`docs/LANZAMIENTO.md`](docs/LANZAMIENTO.md).
+- Architecture and plan: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) · decisions: [`docs/adr/`](docs/adr/) · ops: [`docs/runbooks/`](docs/runbooks/).
+
+## License
+
+Proprietary. All rights reserved. Third-party components keep their own licenses (see `desktop/static/vendor/*LICENSE*`).

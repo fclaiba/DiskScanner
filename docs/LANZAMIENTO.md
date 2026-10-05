@@ -17,10 +17,8 @@ Tiempo estimado: 2–4 horas (más la espera de aprobación de Stripe y del cert
 ## 1. Base de datos — Neon (10 min)
 1. Crear cuenta en https://neon.tech → nuevo proyecto (región cercana a la de Vercel, por ejemplo `us-east-1`).
 2. Copiar la *connection string* (pooled) → será `DATABASE_URL`.
-3. Aplicar migraciones desde tu máquina:
-   ```bash
-   cd web && npm ci && DATABASE_URL="postgres://…" npm run db:migrate
-   ```
+3. Las migraciones se aplican solas en cada deploy de Vercel (`vercel.json`). Para aplicarlas a mano: `cd web && npm ci && DATABASE_URL="postgres://…" npm run db:migrate`.
+4. Para los deploys *Preview*, creá una rama de Neon (o usá la integración Neon ↔ Vercel, que crea una por preview) para no migrar producción desde una rama sin mergear.
 
 ## 2. Clave de firma de entitlements (2 min)
 ```bash

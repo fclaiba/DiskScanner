@@ -6,13 +6,14 @@
     <title>DiskScanner Turbo</title>
     <!-- Per-launch local API token (see app.py _guard_request). -->
     <meta name="ds-token" content="{{ ds_token }}">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- ECharts CDN para el Mapa Visual (Treemap) -->
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="/static/vendor/inter/inter.css">
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+    <!-- Vendored locally (static/vendor) so the app works fully offline -->
+    <script src="/static/vendor/echarts.min.js"></script>
     <!-- Canvas Confetti for satisfying animations -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="/static/vendor/confetti.browser.min.js"></script>
 </head>
 <body>
     <div class="background-blob blob-1"></div>

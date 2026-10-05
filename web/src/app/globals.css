@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+/*
+ * DiskScanner Turbo design tokens — derived 1:1 from the desktop app
+ * (desktop/static/style.css) so the site and the product share one brand.
+ * Default Tailwind palettes are removed on purpose: only these tokens exist.
+ */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Surfaces */
+  --color-bg: #0b0f17;
+  --color-elevated: #131926;
+  --color-surface: #1a2233;
+  --color-overlay: #1f2937;
+
+  /* Text */
+  --color-fg: #f1f5f9;
+  --color-fg-secondary: #cbd5e1;
+  --color-fg-muted: #8b95a7;
+
+  /* Borders (white at low alpha, as in the desktop app) */
+  --color-line-subtle: rgb(255 255 255 / 0.06);
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-line-strong: rgb(255 255 255 / 0.16);
+
+  /* Brand */
+  --color-accent: #3b82f6;
+  --color-accent-400: #60a5fa;
+  --color-accent-600: #2563eb;
+  --color-accent-glow: rgb(59 130 246 / 0.35);
+  --color-violet: #8b5cf6;
+  --color-violet-400: #a78bfa;
+
+  /* Status */
+  --color-success: #10b981;
+  --color-success-400: #34d399;
+  --color-warning: #f59e0b;
+  --color-warning-400: #fbbf24;
+  --color-danger: #ef4444;
+  --color-danger-400: #f87171;
+
+  /* Radii (desktop: 6 / 10 / 14 / 20) */
+  --radius-*: initial;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.45);
+  --shadow-xl: 0 24px 60px rgb(0 0 0 / 0.55);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-rise: rise 600ms var(--ease-out) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-scan: scan 3.2s var(--ease-out) infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: -200% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+  @keyframes scan {
+    0% {
+      transform: scaleX(0.04);
+    }
+    70%,
+    100% {
+      transform: scaleX(1);
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-accent-glow);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  a {
+    text-underline-offset: 3px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  /* Skeleton shimmer for loading states */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-elevated) 0%,
+      var(--color-surface) 50%,
+      var(--color-elevated) 100%
+    );
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded-md;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

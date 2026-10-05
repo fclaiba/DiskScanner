@@ -102,7 +102,7 @@ sequenceDiagram
     D->>W: POST /api/v1/devices/token
   end
   W-->>D: access_token + entitlement firmado (free)
-  U->>W: POST /api/stripe/checkout
+  U->>W: POST /api/billing/checkout
   W->>S: Checkout Session (subscription, trial)
   S-->>U: pago
   S->>W: webhook customer.subscription.created (firmado)
@@ -194,7 +194,7 @@ flowchart LR
 | `/activate` | SSR | sesión |
 | `/dashboard`, `/dashboard/devices`, `/dashboard/billing`, `/dashboard/settings` | SSR | sesión |
 | `/api/v1/*` | route handlers | token de dispositivo |
-| `/api/stripe/*`, `/api/cron/cleanup` | route handlers | sesión / firma / `CRON_SECRET` |
+| `/api/billing/*`, `/api/stripe/webhook`, `/api/auth/logout`, `/api/cron/cleanup` | route handlers | sesión / firma Stripe / `CRON_SECRET` |
 
 ### 6.2 Render y caché
 Marketing estático; todo lo que depende de sesión es dinámico (sin caché compartida). Server Components por defecto; `'use client'` solo en formularios y elementos interactivos.
@@ -229,8 +229,8 @@ Contextos: **identity** (usuarios, sesiones, tokens de email), **billing** (clie
 Contrato desktop completo en `docs/CONTRATO-API.md`. Endpoints web:
 | Método y ruta | Auth | Entrada | Salida | Errores |
 |---|---|---|---|---|
-| `POST /api/stripe/checkout` | sesión + Origin | `{ interval: "month" \| "year" }` | `{ url }` | `401`, `409 already_subscribed`, `503 billing_not_configured` |
-| `POST /api/stripe/portal` | sesión + Origin | — | `{ url }` | `401`, `404 no_customer` |
+| `POST /api/billing/checkout` | sesión + Origin | `{ interval: "month" \| "year" }` | `{ url }` | `401`, `409 already_subscribed`, `503 billing_not_configured` |
+| `POST /api/billing/portal` | sesión + Origin | — | `{ url }` | `401`, `404 no_customer` |
 | `POST /api/stripe/webhook` | firma Stripe | evento | `200` | `400 invalid_signature` |
 | `GET /api/cron/cleanup` | `Bearer CRON_SECRET` | — | `{ deleted }` | `401` |
 | `GET /api/v1/health` | — | — | `{ ok, version }` | — |
@@ -251,7 +251,7 @@ Contrato desktop completo en `docs/CONTRATO-API.md`. Endpoints web:
 Zod `.strict()` en toda entrada; formato único `{ error: { code, message } }`; nunca stack traces al cliente.
 
 ### 7.5 Tareas asíncronas y cron
-Cron diario de Vercel `/api/cron/cleanup` (03:00 UTC): borra sesiones y tokens vencidos, autorizaciones de dispositivo > 1 día, ventanas de rate limit > 1 día y reportes > 13 meses. Idempotente.
+Cron diario de Vercel `/api/cron/cleanup` (04:17 UTC): borra sesiones y tokens vencidos, autorizaciones de dispositivo > 1 día, ventanas de rate limit > 1 día y reportes > 13 meses. Idempotente.
 
 ### 7.6 Integraciones y webhooks
 Stripe: verificación de firma con body crudo; tabla `stripe_events` para idempotencia; reprocesar el mismo evento no tiene efecto. Resend: timeout 10 s; si falla, se registra el error y el usuario puede reenviar.
@@ -286,7 +286,7 @@ Además: `device_authorizations`, `stripe_events`, `rate_limits`, `email_tokens`
 `users.email` único; `sessions.token_hash` único; `devices.token_hash` único y `(user_id, fingerprint)` único; `device_authorizations.user_code` y `device_code_hash` únicos; `reports (user_id, created_at desc)`; `subscriptions.user_id` único.
 
 ### 8.3 Migraciones
-Drizzle Kit, versionadas en `web/drizzle/`, aplicadas con `npm run db:migrate` desde el pipeline/manual controlado antes del deploy; nunca editar una migración ya aplicada.
+Drizzle Kit, versionadas en `web/drizzle/`. Vercel las aplica en cada deploy (`vercel.json`: `npm run db:migrate && npm run build`), por eso cada entorno Preview debe usar su propia rama de Neon. Deben ser compatibles hacia atrás; nunca editar una migración ya aplicada.
 
 ### 8.4 Datos personales
 | Dato | Finalidad | Retención | Borrado |

@@ -95,6 +95,13 @@ def _security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
+    # Every asset is vendored under static/, so the page never needs another
+    # origin - this also stops injected markup from loading or exfiltrating.
+    resp.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+        "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    )
     if request.path == "/":
         resp.headers["Cache-Control"] = "no-store"
     return resp
