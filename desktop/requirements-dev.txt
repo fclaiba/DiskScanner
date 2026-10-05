@@ -1,0 +1,5 @@
+# Test/lint tooling (CI + local). Install together with requirements.txt:
+#   python -m pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.1
+requests-mock==1.12.1
+ruff==0.16.10

@@ -1030,7 +1030,126 @@ h3 {
 }
 
 /* ============================================================
-   16. REDUCED MOTION + SAFETY-NET BREAKPOINTS
+   16. ACCOUNT (chip, link/upgrade/account modals, PRO badges)
+   ============================================================ */
+.account-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-2);
+}
+.account-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: min(100%, 360px);
+    padding: var(--space-2) var(--space-4);
+    background: var(--bg-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: border-color var(--dur-base) var(--ease-out),
+                color var(--dur-base) var(--ease-out);
+}
+.account-chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.account-chip:focus-visible { box-shadow: var(--ring-focus); outline: none; }
+.account-chip #accountChipLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.account-chip--pro {
+    border-color: rgba(139, 92, 246, 0.45);
+    color: var(--text-primary);
+}
+.account-chip--pro > i { color: var(--violet-400); }
+.account-chip__offline {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--warning-500);
+    font-size: var(--text-xs);
+    flex-shrink: 0;
+}
+
+.account-modal { max-width: 540px; }
+.modal-content h2.account-modal__title { color: var(--text-primary); }
+.account-modal .modal-actions { margin-top: var(--space-2); }
+
+.user-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+.user-code {
+    font-family: var(--font-mono);
+    font-size: var(--text-3xl);
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.12em;
+    padding: var(--space-3) var(--space-5);
+    background: var(--bg-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    user-select: all;
+}
+.icon-btn { padding: var(--space-3); }
+.link-status {
+    min-height: 1.5em;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-5);
+}
+
+.benefit-list {
+    list-style: none;
+    text-align: left;
+    margin: 0 auto var(--space-5);
+    display: grid;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+.benefit-list li { display: flex; gap: var(--space-3); align-items: baseline; }
+.benefit-list i { color: var(--success-500); flex-shrink: 0; }
+
+.account-details {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-2) var(--space-5);
+    text-align: left;
+    margin-bottom: var(--space-5);
+    font-size: var(--text-sm);
+}
+.account-details dt { color: var(--text-muted); }
+.account-details dd { color: var(--text-primary); word-break: break-all; }
+
+.pro-pill,
+body.plan-free [data-pro]::after {
+    display: inline-block;
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-full);
+    background: linear-gradient(to right, var(--accent-500), var(--violet-500));
+    color: white;
+    font-size: 0.625rem;
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.06em;
+    line-height: 1.6;
+}
+.pro-pill--lg { font-size: var(--text-xs); padding: var(--space-1) var(--space-3); margin-bottom: var(--space-3); }
+/* Free plan: every Pro-only control carries a small PRO badge. */
+body.plan-free [data-pro]::after {
+    content: "PRO";
+    margin-left: var(--space-1);
+}
+
+/* ============================================================
+   17. REDUCED MOTION + SAFETY-NET BREAKPOINTS
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -1043,6 +1162,7 @@ h3 {
     .card, .tool-card { padding: var(--space-4); }
     .card i, .tool-card__icon { font-size: var(--text-xl); }
     header h1 { font-size: var(--text-2xl); }
+    .user-code { font-size: var(--text-2xl); }
 }
 
 @media (min-width: 1600px) {

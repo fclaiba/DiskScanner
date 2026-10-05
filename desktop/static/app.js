@@ -1,3 +1,46 @@
+// ================================================================
+// LOCAL API ACCESS - every call to the embedded Flask server must carry the
+// per-launch token injected into index.html (see app.py _guard_request).
+// Requests send it as X-DS-Token, EventSource (no custom headers) as ?t=.
+// A 403 pro_required from any gated route opens the upgrade modal.
+// ================================================================
+const DS_TOKEN = (document.querySelector('meta[name="ds-token"]') || {}).content || '';
+
+class ProRequiredError extends Error {}
+
+function withToken(url) {
+    return url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(DS_TOKEN);
+}
+
+async function apiFetch(url, options) {
+    options = options || {};
+    const headers = new Headers(options.headers || {});
+    headers.set('X-DS-Token', DS_TOKEN);
+    const res = await fetch(url, Object.assign({}, options, { headers }));
+    if (res.status === 403) {
+        const body = await res.clone().json().catch(() => null);
+        if (body && body.error && body.error.code === 'pro_required') {
+            window.dispatchEvent(new CustomEvent('ds:pro-required'));
+            throw new ProRequiredError(body.error.message || 'Pro required');
+        }
+    }
+    return res;
+}
+
+function apiEventSource(url) {
+    return new EventSource(withToken(url));
+}
+
+function isProRequired(err) {
+    return err instanceof ProRequiredError;
+}
+
+// Route errors are plain strings, account/gate errors use {code, message}.
+function errorText(err) {
+    if (err && typeof err === 'object') return err.message || err.code || 'Unknown error';
+    return err || 'Unknown error';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const scanBtn = document.getElementById('scanBtn');
     const targetDir = document.getElementById('targetDir');
@@ -20,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(debloatCard) debloatCard.classList.remove('hidden');
         
         // Fetch Disk Health
-        fetch('/api/sys/disk_health')
+        apiFetch('/api/sys/disk_health')
             .then(r => r.json())
             .then(d => {
                 if(d.success && d.health !== "Unknown") {
@@ -114,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             find_dups: findDups
         });
 
-        const eventSource = new EventSource(`/api/scan?${params.toString()}`);
+        const eventSource = apiEventSource(`/api/scan?${params.toString()}`);
 
         eventSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
@@ -501,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!fileToActOn) return;
         
         try {
-            const res = await fetch('/api/move', {
+            const res = await apiFetch('/api/move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filepath: fileToActOn, destination: dest })
@@ -512,10 +555,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 elementToRemove.remove();
                 actionModal.classList.add('hidden');
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + errorText(data.error));
             }
         } catch(e) {
-            alert("Error trying to move the file.");
+            if (!isProRequired(e)) alert("Error trying to move the file.");
         }
     });
 
@@ -528,7 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmFreezeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Freezing...';
         
         try {
-            const res = await fetch('/api/action/compress_zombie', {
+            const res = await apiFetch('/api/action/compress_zombie', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filepath: fileToActOn })
@@ -540,10 +583,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionModal.classList.add('hidden');
                 triggerConfetti();
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + errorText(data.error));
             }
         } catch(e) {
-            alert("Error trying to compress the file.");
+            if (!isProRequired(e)) alert("Error trying to compress the file.");
         } finally {
             confirmFreezeBtn.disabled = false;
             confirmFreezeBtn.innerHTML = '<i class="fa-solid fa-snowflake"></i> Freeze (ZIP)';
@@ -554,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!fileToActOn) return;
         
         try {
-            const res = await fetch('/api/delete', {
+            const res = await apiFetch('/api/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filepath: fileToActOn })
@@ -565,11 +608,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 elementToRemove.remove();
                 actionModal.classList.add('hidden');
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + errorText(data.error));
                 actionModal.classList.add('hidden');
             }
         } catch(e) {
-            alert("Error trying to delete the file.");
+            if (!isProRequired(e)) alert("Error trying to delete the file.");
             actionModal.classList.add('hidden');
         }
     });
@@ -629,7 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
         const filename = `Scan_Report_${dateStr}.txt`;
 
-        fetch('/api/export/save', {
+        apiFetch('/api/export/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: txt, filename })
@@ -638,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(res => {
             if (res.success) {
                 showToast(`Report saved: ${res.path}`, 'Show in folder', () => {
-                    fetch('/api/system/reveal', {
+                    apiFetch('/api/system/reveal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ path: res.path })
@@ -659,11 +702,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const toast = document.createElement('div');
         toast.id = 'appToast';
         toast.className = 'toast';
+        toast.setAttribute('role', 'status');
         toast.innerHTML = `
-            <span class="toast__message">${message}</span>
-            ${actionLabel ? `<button class="btn secondary-btn toast__action">${actionLabel}</button>` : ''}
+            <span class="toast__message"></span>
+            ${actionLabel ? `<button class="btn secondary-btn toast__action">${escapeHtml(actionLabel)}</button>` : ''}
             <button class="toast__close" aria-label="Close">&times;</button>
         `;
+        // textContent: messages can contain file paths (attacker-controllable names).
+        toast.querySelector('.toast__message').textContent = message;
         document.body.appendChild(toast);
 
         const dismiss = () => toast.remove();
@@ -680,11 +726,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.disabled = true;
         btn.innerText = "Cleaning...";
         try {
-            const res = await fetch('/api/cleanup/temp', { method: 'POST' });
+            const res = await apiFetch('/api/cleanup/temp', { method: 'POST' });
             const data = await res.json();
-            alert(data.message);
+            alert(data.success ? data.message : "Error: " + errorText(data.error));
         } catch(e) {
-            alert("Error executing cleanup");
+            if (!isProRequired(e)) alert("Error executing cleanup");
         }
         btn.disabled = false;
         btn.innerText = "Clean %TEMP%";
@@ -707,16 +753,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCleanNpm.disabled = true;
         npmProgressArea.classList.remove('hidden');
         npmLogText.innerText = "Connecting...";
-        npmFreedText.innerText = "0 GB";
+        if (npmFreedText) npmFreedText.innerText = "0 GB";
         
-        const eventSource = new EventSource(`/api/cleanup/npm_stream?target_dir=${encodeURIComponent(dir)}`);
+        const eventSource = apiEventSource(`/api/cleanup/npm_stream?target_dir=${encodeURIComponent(dir)}`);
         
         eventSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
             
             if (data.type === "progress") {
                 npmLogText.innerText = data.message;
-                if(data.freed) npmFreedText.innerText = data.freed;
+                if(data.freed && npmFreedText) npmFreedText.innerText = data.freed;
             } else if (data.type === "result") {
                 eventSource.close();
                 npmLogText.innerText = `Cleanup Finished. Deleted ${data.data.dirs_deleted} folders.`;
@@ -735,8 +781,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         eventSource.onerror = function() {
             eventSource.close();
-            alert("Connection error with server.");
             btnCleanNpm.disabled = false;
+            handleGatedStreamError("Connection error with server.");
         };
     });
     
@@ -758,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
             venvProgressArea.classList.remove('hidden');
             venvLogText.innerText = "Connecting...";
             
-            const eventSource = new EventSource(`/api/cleanup/venv_stream?target_dir=${encodeURIComponent(dir)}`);
+            const eventSource = apiEventSource(`/api/cleanup/venv_stream?target_dir=${encodeURIComponent(dir)}`);
             
             eventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
@@ -783,8 +829,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             eventSource.onerror = function() {
                 eventSource.close();
-                alert("Connection error with server.");
                 btnCleanVenv.disabled = false;
+                handleGatedStreamError("Connection error with server.");
             };
         });
     }
@@ -800,16 +846,16 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = loadingText;
             
             try {
-                const response = await fetch(endpoint, { method: 'POST' });
+                const response = await apiFetch(endpoint, { method: 'POST' });
                 const data = await response.json();
                 if(data.success) {
                     alert("Success: " + data.message);
                     triggerConfetti();
                 } else {
-                    alert("Error: " + data.error);
+                    alert("Error: " + errorText(data.error));
                 }
             } catch (err) {
-                alert("Network error: " + err.message);
+                if (!isProRequired(err)) alert("Network error: " + err.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -838,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnNukeFolders.disabled = true;
             btnNukeFolders.innerText = "Nuking...";
             try {
-                const response = await fetch('/api/cleanup/empty_folders', { 
+                const response = await apiFetch('/api/cleanup/empty_folders', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ target_dir: dir })
@@ -847,8 +893,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(data.success) {
                     alert("Success: " + data.message);
                     triggerConfetti();
-                } else alert("Error: " + data.error);
-            } catch(e) { alert("Error"); }
+                } else alert("Error: " + errorText(data.error));
+            } catch(e) { if (!isProRequired(e)) alert("Error"); }
             btnNukeFolders.disabled = false;
             btnNukeFolders.innerText = "Nuke Empty";
         });
@@ -866,16 +912,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.innerText = "Cleaning...";
         
         try {
-            const response = await fetch('/api/cleanup/gradle', { method: 'POST' });
+            const response = await apiFetch('/api/cleanup/gradle', { method: 'POST' });
             const data = await response.json();
             if(data.success) {
                 alert("Success: " + data.message);
                 triggerConfetti();
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + errorText(data.error));
             }
         } catch (err) {
-            alert("Network error: " + err.message);
+            if (!isProRequired(err)) alert("Network error: " + err.message);
         } finally {
             btn.disabled = false;
             btn.innerText = "Clean Gradle";
@@ -894,16 +940,16 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = "Purging...";
             
             try {
-                const response = await fetch('/api/cleanup/docker', { method: 'POST' });
+                const response = await apiFetch('/api/cleanup/docker', { method: 'POST' });
                 const data = await response.json();
                 if(data.success) {
                     alert("Success: " + data.message);
                     triggerConfetti();
                 } else {
-                    alert("Error: " + data.error);
+                    alert("Error: " + errorText(data.error));
                 }
             } catch (err) {
-                alert("Network error: " + err.message);
+                if (!isProRequired(err)) alert("Network error: " + err.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -922,16 +968,16 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerText = "Cleaning...";
             
             try {
-                const response = await fetch('/api/cleanup/xcode', { method: 'POST' });
+                const response = await apiFetch('/api/cleanup/xcode', { method: 'POST' });
                 const data = await response.json();
                 if(data.success) {
                     alert("Success: " + data.message);
                     triggerConfetti();
                 } else {
-                    alert("Error: " + data.error);
+                    alert("Error: " + errorText(data.error));
                 }
             } catch (err) {
-                alert("Network error: " + err.message);
+                if (!isProRequired(err)) alert("Network error: " + err.message);
             } finally {
                 btn.disabled = false;
                 btn.innerText = "Clean Xcode";
@@ -1019,7 +1065,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cleanupProgressFound.innerText = '0 B found';
 
             const params = new URLSearchParams({ target_dir: dir });
-            const es = new EventSource(`/api/analyze_stream?${params.toString()}`);
+            const es = apiEventSource(`/api/analyze_stream?${params.toString()}`);
 
             es.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
@@ -1120,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="safety-badge safety-badge--${g.safety}">${g.safety === 'safe' ? 'Safe to remove' : 'Review first'}</span>
             <div class="cleanup-group-card__size">${g.formatted_size}</div>
             <div class="cleanup-group-card__items">${itemsPreview}${moreCount}</div>
-            <button class="btn secondary-btn cleanup-group-card__delete-one"><i class="fa-solid fa-broom"></i> Clean this group</button>
+            <button class="btn secondary-btn cleanup-group-card__delete-one" data-pro><i class="fa-solid fa-broom"></i> Clean this group</button>
         `;
 
         card.querySelector('.cleanup-group-card__checkbox').addEventListener('change', updateCleanupFooter);
@@ -1197,7 +1243,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.cleanupPendingSelection = [];
         groups.forEach(g => {
             g.items.forEach(item => {
-                window.cleanupPendingSelection.push({ path: item.path, delete_mode: g.delete_mode });
+                window.cleanupPendingSelection.push({ path: item.path, delete_mode: g.delete_mode, category: g.id });
             });
             // Groups can have more items than the capped preview list sent to
             // the client (see cleanup_engine.py's `cap`); item_count reflects
@@ -1224,7 +1270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressModal.classList.remove('hidden');
 
         try {
-            const resp = await fetch('/api/cleanup/execute', {
+            const resp = await apiFetch('/api/cleanup/execute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ selection: window.cleanupPendingSelection || [] })
@@ -1232,7 +1278,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!resp.ok) {
                 const body = await resp.json().catch(() => ({}));
-                throw new Error(body.error || `Server returned ${resp.status}`);
+                throw new Error(body.error ? errorText(body.error) : `Server returned ${resp.status}`);
             }
 
             const reader = resp.body.getReader();
@@ -1270,6 +1316,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             document.getElementById('cleanupProgressModal').classList.add('hidden');
+            if (isProRequired(err)) return;
             alert('Cleanup failed: ' + err.message);
         }
 
@@ -1277,4 +1324,373 @@ document.addEventListener('DOMContentLoaded', () => {
         // groups are now empty/partial.
         if (analyzeBtn) analyzeBtn.click();
     });
+
+    // ================================================================
+    // ACCOUNT - device linking, Pro gating and the upgrade flow. The server
+    // (app.py + licensing.py) is the authority; this only mirrors its state
+    // for the UI and never decides anything security-relevant on its own.
+    // ================================================================
+
+    let accountState = null;          // last /api/account/status payload
+    let linkPollTimer = null;
+    let linkActive = false;
+    let upgradeWatchTimer = null;
+
+    async function apiJson(url, body) {
+        const opts = body === undefined
+            ? {}
+            : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+        const res = await apiFetch(url, opts);
+        const data = await res.json().catch(() => ({}));
+        return { ok: res.ok, status: res.status, data };
+    }
+
+    function isPro() {
+        return !!(accountState && accountState.pro && (accountState.features || []).includes('cleanup'));
+    }
+
+    function formatDate(value) {
+        if (value === null || value === undefined || value === '') return '-';
+        const d = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
+        return isNaN(d.getTime()) ? '-' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function applyAccountState(state) {
+        accountState = state;
+        const pro = isPro();
+        document.body.classList.toggle('plan-free', !pro);
+        document.body.classList.toggle('plan-pro', pro);
+
+        const chip = document.getElementById('accountChip');
+        const label = document.getElementById('accountChipLabel');
+        const offline = document.getElementById('accountChipOffline');
+        let text = pro ? 'Pro' : 'Free';
+        if (state.dev_bypass) text = 'Pro · dev';
+        else if (state.linked && state.email) text += ' · ' + state.email;
+        else if (!state.linked) text += ' · Link account';
+        label.textContent = text;
+        chip.classList.toggle('account-chip--pro', pro);
+        offline.classList.toggle('hidden', !state.offline);
+        chip.setAttribute('aria-label', `Account: ${pro ? 'Pro' : 'Free'} plan${state.linked ? ', ' + (state.email || 'linked') : ', not linked. Link your account'}${state.offline ? ', offline' : ''}`);
+
+        document.querySelectorAll('[data-pro]').forEach(el => {
+            if (pro) el.removeAttribute('title');
+            else el.setAttribute('title', 'Requires DiskScanner Turbo Pro');
+        });
+
+        // Account modal contents
+        document.getElementById('accountEmail').textContent = state.email || '-';
+        document.getElementById('accountPlan').textContent = pro ? 'Pro' : 'Free';
+        document.getElementById('accountStatus').textContent = state.status || '-';
+        document.getElementById('accountPeriodEnd').textContent = formatDate(state.current_period_end);
+        document.getElementById('accountExpires').textContent = formatDate(state.expires_at);
+        document.getElementById('accountUpgradeBtn').classList.toggle('hidden', pro);
+        document.getElementById('accountDashboardBtn').classList.toggle('hidden', !pro);
+        document.getElementById('accountBillingBtn').classList.toggle('hidden', !state.linked);
+    }
+
+    async function loadAccountState() {
+        try {
+            const { ok, data } = await apiJson('/api/account/status');
+            if (ok) applyAccountState(data);
+        } catch (e) { /* server not reachable - keep last state */ }
+        return accountState;
+    }
+
+    async function refreshAccount(force) {
+        try {
+            const { ok, data } = await apiJson('/api/account/refresh', { force: !!force });
+            if (ok) applyAccountState(data);
+        } catch (e) { /* ignore */ }
+        return accountState;
+    }
+
+    // ---- Modal helper: focus trap, Esc to close, focus restore ----
+    const openModals = [];
+
+    function focusableIn(el) {
+        return Array.from(el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+            .filter(n => !n.disabled && !n.closest('.hidden') && n.offsetParent !== null);
+    }
+
+    function openModal(modal, onClose) {
+        if (!modal.classList.contains('hidden')) return;
+        openModals.push({ modal, onClose, returnFocus: document.activeElement });
+        modal.classList.remove('hidden');
+        const items = focusableIn(modal);
+        const primary = modal.querySelector('.primary-btn:not(.hidden)') || items[0];
+        if (primary) primary.focus();
+    }
+
+    function closeModal(modal) {
+        const idx = openModals.findIndex(m => m.modal === modal);
+        modal.classList.add('hidden');
+        if (idx === -1) return;
+        const entry = openModals.splice(idx, 1)[0];
+        if (entry.onClose) entry.onClose();
+        if (entry.returnFocus && typeof entry.returnFocus.focus === 'function') entry.returnFocus.focus();
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const top = openModals[openModals.length - 1];
+        if (!top) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeModal(top.modal);
+        } else if (e.key === 'Tab') {
+            const items = focusableIn(top.modal);
+            if (items.length === 0) { e.preventDefault(); return; }
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (e.shiftKey && (document.activeElement === first || !top.modal.contains(document.activeElement))) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && (document.activeElement === last || !top.modal.contains(document.activeElement))) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    });
+
+    // Click on the dimmed backdrop closes the account modals too.
+    ['linkModal', 'upgradeModal', 'accountModal'].forEach(id => {
+        const m = document.getElementById(id);
+        m.addEventListener('click', (e) => { if (e.target === m) closeModal(m); });
+    });
+
+    // ---- Link account (device authorization flow) ----
+    const linkModal = document.getElementById('linkModal');
+    const linkUserCode = document.getElementById('linkUserCode');
+    const linkStatus = document.getElementById('linkStatus');
+    const linkOpenBtn = document.getElementById('linkOpenBtn');
+
+    function stopLinkPolling() {
+        linkActive = false;
+        if (linkPollTimer) clearTimeout(linkPollTimer);
+        linkPollTimer = null;
+    }
+
+    function scheduleLinkPoll(seconds) {
+        if (!linkActive) return;
+        linkPollTimer = setTimeout(pollLink, Math.max(1, seconds || 5) * 1000);
+    }
+
+    async function pollLink() {
+        if (!linkActive) return;
+        let result;
+        try {
+            ({ data: result } = await apiJson('/api/account/login/poll', {}));
+        } catch (e) {
+            linkStatus.textContent = 'Lost connection to the app. Retrying...';
+            return scheduleLinkPoll(5);
+        }
+        if (!linkActive) return;
+        switch (result.status) {
+            case 'linked':
+                stopLinkPolling();
+                applyAccountState(result.state);
+                linkStatus.textContent = 'Linked! You can close this window.';
+                closeModal(linkModal);
+                showToast(isPro() ? `Linked as ${result.state.email || 'your account'} - Pro unlocked.` : `Linked as ${result.state.email || 'your account'}.`, null, null);
+                if (!isPro() && pendingUpgradeAfterLink) {
+                    pendingUpgradeAfterLink = false;
+                    openUpgradeModal();
+                }
+                return;
+            case 'denied':
+                stopLinkPolling();
+                linkStatus.textContent = 'Linking was rejected in the browser. Close this and try again.';
+                return;
+            case 'expired':
+                stopLinkPolling();
+                linkStatus.textContent = 'This code expired. Close this and start again to get a new one.';
+                return;
+            case 'error':
+                stopLinkPolling();
+                linkStatus.textContent = 'Could not link: ' + (result.message || result.error || 'unknown error');
+                return;
+            case 'slow_down':
+            case 'pending':
+            default:
+                linkStatus.textContent = result.offline
+                    ? 'You seem to be offline. Still waiting for confirmation...'
+                    : 'Waiting for you to confirm in the browser...';
+                return scheduleLinkPoll(result.interval);
+        }
+    }
+
+    let pendingUpgradeAfterLink = false;
+
+    async function startLinking() {
+        stopLinkPolling();
+        linkUserCode.textContent = '----';
+        linkStatus.textContent = 'Requesting a code...';
+        linkOpenBtn.disabled = true;
+        openModal(linkModal, () => {
+            if (linkActive) apiJson('/api/account/login/cancel', {}).catch(() => {});
+            stopLinkPolling();
+        });
+        let resp;
+        try {
+            resp = await apiJson('/api/account/login', {});
+        } catch (e) {
+            linkStatus.textContent = 'Could not reach the app server.';
+            return;
+        }
+        if (!resp.ok) {
+            linkStatus.textContent = 'Could not start linking: ' + errorText(resp.data.error);
+            return;
+        }
+        linkUserCode.textContent = resp.data.user_code;
+        linkOpenBtn.disabled = false;
+        linkStatus.textContent = 'Your browser should have opened. Waiting for you to confirm...';
+        linkActive = true;
+        scheduleLinkPoll(resp.data.interval);
+    }
+
+    document.getElementById('linkCancelBtn').addEventListener('click', () => closeModal(linkModal));
+    linkOpenBtn.addEventListener('click', () => { apiJson('/api/account/login/open', {}).catch(() => {}); });
+    document.getElementById('linkCopyBtn').addEventListener('click', async () => {
+        const code = linkUserCode.textContent;
+        if (!code || code === '----') return;
+        try {
+            await navigator.clipboard.writeText(code);
+        } catch (e) {
+            const ta = document.createElement('textarea');
+            ta.value = code;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+            ta.remove();
+        }
+        linkStatus.textContent = 'Code copied. Waiting for you to confirm in the browser...';
+    });
+
+    // ---- Upgrade modal ----
+    const upgradeModal = document.getElementById('upgradeModal');
+    const upgradeStatus = document.getElementById('upgradeStatus');
+
+    function stopUpgradeWatch() {
+        if (upgradeWatchTimer) clearInterval(upgradeWatchTimer);
+        upgradeWatchTimer = null;
+    }
+
+    function openUpgradeModal() {
+        if (!upgradeModal.classList.contains('hidden')) return;
+        upgradeStatus.textContent = '';
+        openModal(upgradeModal);
+    }
+
+    // After checkout, the web side flips the subscription within seconds:
+    // poll the entitlement (forced) for up to 10 min so Pro unlocks without
+    // the user having to do anything (BLUEPRINT: <= 60 s after payment).
+    function startUpgradeWatch() {
+        stopUpgradeWatch();
+        const until = Date.now() + 10 * 60 * 1000;
+        upgradeWatchTimer = setInterval(async () => {
+            if (Date.now() > until || !accountState || !accountState.linked) return stopUpgradeWatch();
+            await refreshAccount(true);
+            if (isPro()) {
+                stopUpgradeWatch();
+                closeModal(upgradeModal);
+                showToast('Pro unlocked - thanks for subscribing!', null, null);
+            }
+        }, 20000);
+    }
+
+    window.addEventListener('ds:pro-required', () => openUpgradeModal());
+
+    document.getElementById('upgradeCloseBtn').addEventListener('click', () => closeModal(upgradeModal));
+    document.getElementById('upgradeTrialBtn').addEventListener('click', async () => {
+        await apiJson('/api/account/open', { page: 'pricing' }).catch(() => {});
+        if (accountState && accountState.linked) {
+            upgradeStatus.textContent = 'Finish checkout in your browser - Pro unlocks here automatically.';
+            startUpgradeWatch();
+        } else {
+            upgradeStatus.textContent = 'After subscribing, click "I already subscribed" to link this PC.';
+        }
+    });
+    document.getElementById('upgradeCheckBtn').addEventListener('click', async () => {
+        if (!accountState || !accountState.linked) {
+            // Must link this PC to the subscribed account first.
+            closeModal(upgradeModal);
+            pendingUpgradeAfterLink = true;
+            startLinking();
+            return;
+        }
+        upgradeStatus.textContent = 'Checking your subscription...';
+        await refreshAccount(true);
+        if (isPro()) {
+            closeModal(upgradeModal);
+            showToast('Pro unlocked - enjoy!', null, null);
+        } else if (accountState && accountState.offline) {
+            upgradeStatus.textContent = "Couldn't reach the server. Check your connection and try again.";
+        } else {
+            upgradeStatus.textContent = `No active subscription found for ${accountState.email || 'this account'} yet. It can take a few seconds after checkout.`;
+        }
+    });
+
+    // ---- Account details modal ----
+    const accountModal = document.getElementById('accountModal');
+    const accountMessage = document.getElementById('accountMessage');
+
+    document.getElementById('accountChip').addEventListener('click', async () => {
+        if (!accountState) await loadAccountState();
+        if (accountState && !accountState.linked && !accountState.dev_bypass) {
+            startLinking();
+            return;
+        }
+        accountMessage.textContent = accountState && accountState.offline ? 'Offline - using your saved plan until it expires.' : '';
+        openModal(accountModal);
+    });
+    document.getElementById('accountCloseBtn').addEventListener('click', () => closeModal(accountModal));
+    document.getElementById('accountRefreshBtn').addEventListener('click', async () => {
+        accountMessage.textContent = 'Refreshing...';
+        await refreshAccount(true);
+        accountMessage.textContent = accountState && accountState.offline ? "Couldn't reach the server." : 'Up to date.';
+    });
+    document.getElementById('accountLogoutBtn').addEventListener('click', async () => {
+        if (!confirm('Unlink this PC from your account? Pro features will be locked until you link it again.')) return;
+        try {
+            const { data } = await apiJson('/api/account/logout', {});
+            applyAccountState(data);
+        } catch (e) { /* ignore */ }
+        closeModal(accountModal);
+        showToast('This PC was unlinked. You are on the free plan.', null, null);
+    });
+    document.getElementById('accountUpgradeBtn').addEventListener('click', () => {
+        closeModal(accountModal);
+        openUpgradeModal();
+    });
+    document.getElementById('accountDashboardBtn').addEventListener('click', () => apiJson('/api/account/open', { page: 'dashboard' }).catch(() => {}));
+    document.getElementById('accountBillingBtn').addEventListener('click', () => apiJson('/api/account/open', { page: 'billing' }).catch(() => {}));
+
+    // ---- Pro gating on the client (UX only - the server enforces it) ----
+    // Capture phase on document runs before every button's own handler, so a
+    // known-free user gets the upgrade modal instead of confirm() dialogs and
+    // a 403. Unknown state (status not loaded yet) falls through to the server.
+    document.addEventListener('click', (e) => {
+        const gated = e.target.closest && e.target.closest('[data-pro]');
+        if (!gated || !accountState || isPro()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        openUpgradeModal();
+    }, true);
+
+    // EventSource can't see HTTP status codes: after a stream error on a
+    // gated route, ask the account state whether it was the Pro gate.
+    async function handleGatedStreamError(fallbackMessage) {
+        await loadAccountState();
+        if (accountState && !isPro()) openUpgradeModal();
+        else alert(fallbackMessage);
+    }
+
+    // Coming back from the browser (activation, checkout): refresh quietly.
+    // licensing.refresh_entitlement() rate-limits non-forced refreshes.
+    window.addEventListener('focus', () => {
+        if (accountState && accountState.linked && !isPro()) refreshAccount(false);
+        else loadAccountState();
+    });
+
+    loadAccountState();
 });

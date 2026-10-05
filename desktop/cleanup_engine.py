@@ -19,17 +19,17 @@ rather than re-inventing them.
 """
 
 import os
-import sys
-import time
 import shutil
+import sys
 import tempfile
+import time
 from collections import defaultdict
 
 # _is_forbidden_path (and the FORBIDDEN_PATHS list behind it) lives in
 # scanner_logic.py as the single source of truth for this security-relevant
 # guard - app.py imports the same function rather than each module keeping
 # its own copy, so a future fix to what's protected only has to happen once.
-from scanner_logic import format_size, _is_reparse_point, get_file_hash, _is_forbidden_path
+from scanner_logic import _is_forbidden_path, _is_reparse_point, format_size, get_file_hash
 
 try:
     from send2trash import send2trash
@@ -38,6 +38,15 @@ except ImportError:
 
 
 _is_forbidden = _is_forbidden_path  # local alias, keeps call sites below unchanged
+
+# Stable category ids used as group "id" below. Also the only category keys
+# ever sent in a sync report (POST /api/v1/reports, see licensing.build_report)
+# - they must stay ^[a-z0-9_]{1,40}$ and never contain user data.
+CATEGORY_KEYS = (
+    "temp", "browser_cache", "gpu_shaders", "messaging_cache", "dev_caches",
+    "xcode_derived", "recycle_bin", "node_modules", "venvs", "empty_dirs",
+    "zombies", "duplicates",
+)
 
 
 def _dir_size(path, deadline=None):
@@ -370,20 +379,74 @@ def run_cleanup_analysis_stream(target_dir):
 
     # --- Target-directory-specific categories ---
     if target_dir and os.path.isdir(target_dir) and not _is_forbidden(target_dir):
-        yield {"type": "progress", "message": f"Scanning {target_dir} for reclaimable items...", "found": format_size(running_total)}
+        yield {
+            "type": "progress",
+            "message": f"Scanning {target_dir} for reclaimable items...",
+            "found": format_size(running_total),
+        }
         deadline = time.time() + 45  # hard cap so analysis never hangs on huge trees
         walked = _walk_target_for_categories(target_dir, errors, deadline)
 
         if walked["node_modules"]:
-            groups.append(make_group("node_modules", "node_modules Folders", "development", "safe", "permanent", "fa-brands fa-npm", walked["node_modules"]))
+            groups.append(
+                make_group(
+                    "node_modules",
+                    "node_modules Folders",
+                    "development",
+                    "safe",
+                    "permanent",
+                    "fa-brands fa-npm",
+                    walked["node_modules"],
+                )
+            )
         if walked["venvs"]:
-            groups.append(make_group("venvs", "Python Virtual Environments", "development", "safe", "permanent", "fa-brands fa-python", walked["venvs"]))
+            groups.append(
+                make_group(
+                    "venvs",
+                    "Python Virtual Environments",
+                    "development",
+                    "safe",
+                    "permanent",
+                    "fa-brands fa-python",
+                    walked["venvs"],
+                )
+            )
         if walked["empty_dirs"]:
-            groups.append(make_group("empty_dirs", "Empty Folders", "user_files", "review", "recycle", "fa-solid fa-folder-minus", walked["empty_dirs"]))
+            groups.append(
+                make_group(
+                    "empty_dirs",
+                    "Empty Folders",
+                    "user_files",
+                    "review",
+                    "recycle",
+                    "fa-solid fa-folder-minus",
+                    walked["empty_dirs"],
+                )
+            )
         if walked["zombies"]:
-            groups.append(make_group("zombies", "Old Large Files (Zombies)", "user_files", "review", "recycle", "fa-solid fa-ghost", walked["zombies"]))
+            groups.append(
+                make_group(
+                    "zombies",
+                    "Old Large Files (Zombies)",
+                    "user_files",
+                    "review",
+                    "recycle",
+                    "fa-solid fa-ghost",
+                    walked["zombies"],
+                )
+            )
         if walked["duplicates"]:
-            groups.append(make_group("duplicates", "Duplicate Files", "user_files", "review", "recycle", "fa-solid fa-copy", walked["duplicates"]))
+            groups.append(
+                make_group(
+                    "duplicates",
+                    "Duplicate Files",
+                    "user_files",
+                    "review",
+                    "recycle",
+                    "fa-solid fa-copy",
+                    walked["duplicates"],
+                )
+            )
 
     groups.sort(key=lambda g: g["total_bytes"], reverse=True)
     total_bytes = sum(g["total_bytes"] for g in groups)
@@ -400,22 +463,28 @@ def run_cleanup_analysis_stream(target_dir):
 
 
 def run_cleanup_execute_stream(selection):
-    """selection: list of {"path": str, "delete_mode": "permanent"|"recycle"}.
-    Re-validates FORBIDDEN_PATHS server-side regardless of what the client
-    sent - the client's selection is never trusted blindly."""
+    """selection: list of {"path": str, "delete_mode": "permanent"|"recycle",
+    "category": optional group id}. Re-validates FORBIDDEN_PATHS server-side
+    regardless of what the client sent - the client's selection is never
+    trusted blindly. `category` is only used for the aggregate per-category
+    tally in the result (sync reports) and must be one of CATEGORY_KEYS."""
     yield {"type": "progress", "message": f"Preparing to clean {len(selection)} item(s)...", "freed": format_size(0)}
 
     freed = 0
     deleted_count = 0
     failed_count = 0
     errors = []
+    by_category = {}
     last_yield = time.time()
 
     for item in selection:
+        if not isinstance(item, dict):
+            continue
         path = item.get("path")
         mode = item.get("delete_mode", "permanent")
+        category = item.get("category") if item.get("category") in CATEGORY_KEYS else None
 
-        if not path:
+        if not path or not isinstance(path, str):
             continue
 
         # normpath before any OS/shell call: send2trash's underlying Windows
@@ -427,6 +496,7 @@ def run_cleanup_execute_stream(selection):
         if path == "__RECYCLE_BIN__":
             if _empty_recycle_bin():
                 deleted_count += 1
+                _tally(by_category, "recycle_bin", 0)
             else:
                 failed_count += 1
                 errors.append({"path": path, "reason": "could_not_empty_recycle_bin"})
@@ -460,6 +530,8 @@ def run_cleanup_execute_stream(selection):
 
             freed += size
             deleted_count += 1
+            if category:
+                _tally(by_category, category, size)
         except PermissionError:
             failed_count += 1
             errors.append({"path": path, "reason": "permission_denied"})
@@ -483,6 +555,13 @@ def run_cleanup_execute_stream(selection):
             "freed_bytes": freed,
             "deleted_count": deleted_count,
             "failed_count": failed_count,
+            "categories": [{"key": k, "bytes": v["bytes"], "count": v["count"]} for k, v in by_category.items()],
             "errors": {"count": len(errors), "items": errors[:50]},
         },
     }
+
+
+def _tally(by_category, key, size):
+    entry = by_category.setdefault(key, {"bytes": 0, "count": 0})
+    entry["bytes"] += size
+    entry["count"] += 1

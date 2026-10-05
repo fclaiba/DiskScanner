@@ -1,4 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
+# PyInstaller spec used by build.py (local and CI): onefile, windowed,
+# output dist/DiskScannerTurbo.exe.
 
 
 a = Analysis(
@@ -6,11 +8,13 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('templates', 'templates'), ('static', 'static')],
-    hiddenimports=[],
+    # pywebview is imported lazily inside main(); list it explicitly so the
+    # analysis still bundles it.
+    hiddenimports=['webview'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['pytest', 'requests_mock', 'tkinter'],
     noarchive=False,
     optimize=0,
 )
@@ -26,7 +30,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,

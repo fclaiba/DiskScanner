@@ -74,7 +74,7 @@ jobs:
           cache-dependency-path: |
             desktop/requirements.txt
             desktop/requirements-dev.txt
-      - run: pip install -r requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Lint
         run: ruff check .
       - name: Tests

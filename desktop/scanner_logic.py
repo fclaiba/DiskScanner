@@ -1,9 +1,9 @@
-import os
-import sys
 import hashlib
-import time
+import os
 import shutil
 import stat
+import sys
+import time
 from collections import defaultdict
 
 if sys.platform == 'win32':
@@ -59,18 +59,18 @@ def get_file_hash(filepath, chunk_size=8192, max_bytes=50 * 1024 * 1024):
 def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
     if ignore_dirs is None:
         ignore_dirs = []
-        
+
     total_size = 0
     file_count = 0
     dir_count = 0
     extension_sizes = defaultdict(int)
     extension_counts = defaultdict(int)
-    largest_files = [] 
+    largest_files = []
     empty_dirs = []
     files_by_size = defaultdict(list)
-    
+
     git_projects = defaultdict(int)
-    
+
     game_mods_size = 0
     game_mods_count = 0
     game_mods_paths = set()
@@ -79,7 +79,7 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
         'epic games', 'xboxgames', 'windowsapps', os.path.join('steamapps', 'common').lower(),
         'riot games', 'ubisoft game launcher', 'deriveddata', os.path.join('library', 'caches')
     ]
-    
+
     macro_folders = {}
     zombie_files = []
     treemap_data = {"name": target_dir, "value": 0, "children": []}
@@ -91,7 +91,7 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
     yield {"type": "progress", "message": f"Starting scan in {target_dir}...", "files_scanned": 0, "macro": []}
 
     last_yield_time = time.time()
-    
+
     # 1. Macro folders detection
     root_level_dirs = []
     try:
@@ -105,41 +105,43 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
         pass
 
     stack = [(target_dir, None)]
-    
+
     while stack:
         current_dir, current_project = stack.pop()
-        
+
         dir_name = os.path.basename(current_dir).lower()
         if dir_name in ignore_dirs:
             continue
-            
+
         dir_count += 1
         current_dir_lower = current_dir.lower()
         is_mod_dir = any(keyword in current_dir_lower for keyword in mod_keywords)
-        
+
         current_macro = None
         for rld in root_level_dirs:
             if current_dir == rld or current_dir.startswith(rld + os.sep):
                 current_macro = rld
                 break
-                
+
         if time.time() - last_yield_time > 0.3:
-            macro_stats = [{"path": k, "size": v, "formatted_size": format_size(v)} for k,v in macro_folders.items() if v > 0]
+            macro_stats = [
+                {"path": k, "size": v, "formatted_size": format_size(v)} for k, v in macro_folders.items() if v > 0
+            ]
             macro_stats = sorted(macro_stats, key=lambda x: x["size"], reverse=True)[:10]
             yield {
-                "type": "progress", 
-                "message": f"Scanning: {current_dir}", 
+                "type": "progress",
+                "message": f"Scanning: {current_dir}",
                 "files_scanned": file_count,
                 "macro": macro_stats
             }
             last_yield_time = time.time()
-            
+
         has_items = False
         try:
             with os.scandir(current_dir) as it:
                 entries = list(it)
                 has_items = bool(entries)
-                
+
                 if not current_project:
                     for entry in entries:
                         if entry.is_dir(follow_symlinks=False) and entry.name == '.git':
@@ -156,17 +158,17 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
                             stat = entry.stat(follow_symlinks=False)
                             file_size = stat.st_size
                             filepath = entry.path
-                            
+
                             total_size += file_size
                             file_count += 1
-                            
+
                             if current_macro:
                                 macro_folders[current_macro] += file_size
                                 treemap_nodes[current_macro] += file_size
-                                
+
                             if current_project:
                                 git_projects[current_project] += file_size
-                                
+
                             if file_size > 52428800:
                                 atime = stat.st_atime
                                 mtime = stat.st_mtime
@@ -176,19 +178,21 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
                                         "size": file_size,
                                         "formatted_size": format_size(file_size)
                                     })
-                                    
+
                             _, ext = os.path.splitext(entry.name)
                             ext = ext.lower() or "No extension"
-                            
+
                             extension_sizes[ext] += file_size
                             extension_counts[ext] += 1
-                            
-                            largest_files.append({"size": file_size, "path": filepath, "formatted_size": format_size(file_size)})
+
+                            largest_files.append(
+                                {"size": file_size, "path": filepath, "formatted_size": format_size(file_size)}
+                            )
                             largest_files = sorted(largest_files, key=lambda x: x["size"], reverse=True)[:20]
-                            
+
                             if find_dups and file_size > 1024 * 1024:
                                 files_by_size[file_size].append(filepath)
-                                
+
                             if is_mod_dir or any(keyword in entry.name.lower() for keyword in mod_keywords):
                                 game_mods_size += file_size
                                 game_mods_count += 1
@@ -211,21 +215,30 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
         if v > 0:
             treemap_data["children"].append({"name": os.path.basename(k), "value": v, "path": k})
 
-    macro_stats_final = [{"path": k, "size": v, "formatted_size": format_size(v)} for k,v in macro_folders.items() if v > 0]
-    
+    macro_stats_final = [
+        {"path": k, "size": v, "formatted_size": format_size(v)} for k, v in macro_folders.items() if v > 0
+    ]
+
     real_duplicates = []
     total_duplicate_space = 0
     duplicates_partial = False
 
     if find_dups:
-        yield {"type": "progress", "message": "Searching for exact duplicate files (Calculating MD5 Hash)...", "files_scanned": file_count, "macro": macro_stats_final[:10]}
+        yield {
+            "type": "progress",
+            "message": "Searching for exact duplicate files (Calculating MD5 Hash)...",
+            "files_scanned": file_count,
+            "macro": macro_stats_final[:10],
+        }
         duplicates = defaultdict(list)
 
         MAX_BUCKET_CANDIDATES = 200  # skip hashing a size-bucket with more candidates than this
         MAX_HASH_SECONDS = 30        # hard time budget for the whole hashing pass
         dup_scan_start = time.time()
 
-        hashable_buckets = {size: paths for size, paths in files_by_size.items() if 1 < len(paths) <= MAX_BUCKET_CANDIDATES}
+        hashable_buckets = {
+            size: paths for size, paths in files_by_size.items() if 1 < len(paths) <= MAX_BUCKET_CANDIDATES
+        }
         if any(len(paths) > MAX_BUCKET_CANDIDATES for paths in files_by_size.values()):
             duplicates_partial = True
 
@@ -258,7 +271,7 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
 
         dup_groups = {k: v for k, v in duplicates.items() if len(v) > 1}
         dup_groups_sorted = sorted(dup_groups.items(), key=lambda x: x[0][0] * (len(x[1])-1), reverse=True)[:20]
-        
+
         for (size, hash_val), paths in dup_groups_sorted:
             wasted_space = size * (len(paths) - 1)
             total_duplicate_space += wasted_space
@@ -270,10 +283,13 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
             })
 
     sorted_exts = sorted(extension_sizes.items(), key=lambda x: x[1], reverse=True)[:20]
-    extensions = [{"ext": ext, "size": size, "formatted_size": format_size(size), "count": extension_counts[ext]} for ext, size in sorted_exts]
-    
+    extensions = [
+        {"ext": ext, "size": size, "formatted_size": format_size(size), "count": extension_counts[ext]}
+        for ext, size in sorted_exts
+    ]
+
     zombie_files = sorted(zombie_files, key=lambda x: x["size"], reverse=True)[:30]
-    
+
     heavy_projects = [{"path": p, "size": s, "formatted_size": format_size(s)} for p, s in git_projects.items()]
     heavy_projects = sorted(heavy_projects, key=lambda x: x["size"], reverse=True)[:20]
 
@@ -310,7 +326,7 @@ def run_scan_stream(target_dir, ignore_dirs=None, find_dups=True):
 
 def run_npm_cleanup_stream(target_dir):
     yield {"type": "progress", "message": f"Starting node_modules scan in {target_dir}..."}
-    
+
     total_freed = 0
     dirs_deleted = 0
     stack = [target_dir]
@@ -338,26 +354,42 @@ def run_npm_cleanup_stream(target_dir):
                                 continue
                             if entry.name.lower() == 'node_modules':
                                 if _is_forbidden_path(entry.path):
-                                    yield {"type": "progress", "message": f"Skipped (protected path): {entry.path}", "freed": format_size(total_freed)}
+                                    yield {
+                                        "type": "progress",
+                                        "message": f"Skipped (protected path): {entry.path}",
+                                        "freed": format_size(total_freed),
+                                    }
                                     continue
-                                yield {"type": "progress", "message": f"Calculating size and destroying: {entry.path}", "freed": format_size(total_freed)}
-                                
+                                yield {
+                                    "type": "progress",
+                                    "message": f"Calculating size and destroying: {entry.path}",
+                                    "freed": format_size(total_freed),
+                                }
+
                                 dir_size = 0
                                 for root, dirs, files in os.walk(entry.path):
                                     for f in files:
                                         try:
                                             dir_size += os.path.getsize(os.path.join(root, f))
-                                        except:
+                                        except OSError:
                                             pass
-                                
+
                                 try:
                                     shutil.rmtree(entry.path)
                                     total_freed += dir_size
                                     dirs_deleted += 1
-                                    
-                                    yield {"type": "progress", "message": f"Destroyed: {entry.path} ({format_size(dir_size)})", "freed": format_size(total_freed)}
+
+                                    yield {
+                                        "type": "progress",
+                                        "message": f"Destroyed: {entry.path} ({format_size(dir_size)})",
+                                        "freed": format_size(total_freed),
+                                    }
                                 except Exception as e:
-                                    yield {"type": "progress", "message": f"Error deleting {entry.path}: {str(e)}", "freed": format_size(total_freed)}
+                                    yield {
+                                        "type": "progress",
+                                        "message": f"Error deleting {entry.path}: {str(e)}",
+                                        "freed": format_size(total_freed),
+                                    }
                             else:
                                 stack.append(entry.path)
                     except PermissionError:
@@ -374,13 +406,14 @@ def run_npm_cleanup_stream(target_dir):
         "data": {
             "dirs_deleted": dirs_deleted,
             "total_freed": format_size(total_freed),
+            "total_freed_bytes": total_freed,
             "errors": {"count": len(errors), "items": errors[:50]}
         }
     }
 
 def run_venv_cleanup_stream(target_dir):
     yield {"type": "progress", "message": f"Starting Python virtual environment scan in {target_dir}..."}
-    
+
     total_freed = 0
     dirs_deleted = 0
     stack = [target_dir]
@@ -411,22 +444,33 @@ def run_venv_cleanup_stream(target_dir):
                             if entry.name.lower() in venv_names:
                                 # Check if it's a real venv (contains Scripts/python.exe or bin/python)
                                 is_venv = False
-                                for py_path in [os.path.join(entry.path, 'Scripts', 'python.exe'), os.path.join(entry.path, 'bin', 'python')]:
+                                for py_path in [
+                                    os.path.join(entry.path, 'Scripts', 'python.exe'),
+                                    os.path.join(entry.path, 'bin', 'python'),
+                                ]:
                                     if os.path.exists(py_path):
                                         is_venv = True
                                         break
-                                
+
                                 if is_venv and _is_forbidden_path(entry.path):
-                                    yield {"type": "progress", "message": f"Skipped (protected path): {entry.path}", "freed": format_size(total_freed)}
+                                    yield {
+                                        "type": "progress",
+                                        "message": f"Skipped (protected path): {entry.path}",
+                                        "freed": format_size(total_freed),
+                                    }
                                 elif is_venv:
-                                    yield {"type": "progress", "message": f"Calculating size and destroying venv: {entry.path}", "freed": format_size(total_freed)}
+                                    yield {
+                                        "type": "progress",
+                                        "message": f"Calculating size and destroying venv: {entry.path}",
+                                        "freed": format_size(total_freed),
+                                    }
 
                                     dir_size = 0
                                     for root, dirs, files in os.walk(entry.path):
                                         for f in files:
                                             try:
                                                 dir_size += os.path.getsize(os.path.join(root, f))
-                                            except:
+                                            except OSError:
                                                 pass
 
                                     try:
@@ -434,9 +478,17 @@ def run_venv_cleanup_stream(target_dir):
                                         total_freed += dir_size
                                         dirs_deleted += 1
 
-                                        yield {"type": "progress", "message": f"Destroyed venv: {entry.path} ({format_size(dir_size)})", "freed": format_size(total_freed)}
+                                        yield {
+                                            "type": "progress",
+                                            "message": f"Destroyed venv: {entry.path} ({format_size(dir_size)})",
+                                            "freed": format_size(total_freed),
+                                        }
                                     except Exception as e:
-                                        yield {"type": "progress", "message": f"Error deleting {entry.path}: {str(e)}", "freed": format_size(total_freed)}
+                                        yield {
+                                            "type": "progress",
+                                            "message": f"Error deleting {entry.path}: {str(e)}",
+                                            "freed": format_size(total_freed),
+                                        }
                                 else:
                                     stack.append(entry.path)
                             else:
@@ -455,6 +507,7 @@ def run_venv_cleanup_stream(target_dir):
         "data": {
             "dirs_deleted": dirs_deleted,
             "total_freed": format_size(total_freed),
+            "total_freed_bytes": total_freed,
             "errors": {"count": len(errors), "items": errors[:50]}
         }
     }

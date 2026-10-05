@@ -1,13 +1,12 @@
-# Runtime dependencies. Pin with `pip freeze` if you need exact transitive versions too.
+# Runtime dependencies of the shipped app. Pin with `pip freeze` if you need exact transitive versions too.
 Flask==3.1.3
 pywebview==6.2.1
 requests==2.33.0
 cryptography>=42
 send2trash==2.1.0
 
-# Dev-only, needed to produce the fast/dev .exe (see BUILD.md)
+# Build tooling for the PyInstaller .exe (build.py / CI release, see BUILD.md)
 pyinstaller==6.19.0
 
-# Release-only build tooling (Nuitka + PyArmor) is intentionally NOT pinned here —
-# it's not a runtime dependency of the shipped app. See BUILD.md for the release
-# build pipeline and its own install step.
+# Test/lint tooling lives in requirements-dev.txt. Release-only hardening
+# (Nuitka + PyArmor) is intentionally NOT pinned here - see BUILD.md.
