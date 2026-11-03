@@ -34,3 +34,6 @@ graphify-out/cache/
 .claude/.headroom_wrap_marker.json
 .DS_Store
 Thumbs.db
+graphify-out/2026-*/
+graphify-out/.graphify_python
+graphify-out/.graphify_labels.pending.json
