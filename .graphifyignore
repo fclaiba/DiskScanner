@@ -1,0 +1,8 @@
+desktop/static/vendor/
+web/.next/
+web/node_modules/
+web/coverage/
+web/.data/
+graphify-out/
+dist/
+build/

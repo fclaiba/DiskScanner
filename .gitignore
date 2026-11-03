@@ -30,7 +30,7 @@ next-env.d.ts
 
 # Tooling local / generado
 .tokensave/
-graphify-out/
+graphify-out/cache/
 .claude/.headroom_wrap_marker.json
 .DS_Store
 Thumbs.db
